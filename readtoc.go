@@ -4,85 +4,83 @@
 
 package xar
 
+import "encoding/xml"
+
 // This file implements the logic that translates a XAR TOC
 // to the internal format of this library.
 
-import (
-	"xml"
-)
-
 type xmlXar struct {
-	XMLName xml.Name "xar"
+	XMLName xml.Name `xml:"xar"`
 	Toc     xmlToc
 }
 
 type xmlChecksum struct {
-	XMLName xml.Name "checksum"
-	Style   string   "attr"
-	Offset  int64
-	Size    int64
+	XMLName xml.Name `xml:"checksum"`
+	Style   string   `xml:"style,attr"`
+	Offset  int64    `xml:"offset"`
+	Size    int64    `xml:"size"`
 }
 
 type xmlSignature struct {
-	XMLName      xml.Name "signature"
-	Style        string   "attr"
-	Offset       int64
-	Size         int64
-	Certificates []string "KeyInfo>X509Data>X509Certificate"
+	XMLName      xml.Name `xml:"signature"`
+	Style        string   `xml:"style,attr"`
+	Offset       int64    `xml:"offset"`
+	Size         int64    `xml:"size"`
+	Certificates []string `xml:"KeyInfo>X509Data>X509Certificate"`
 }
 
 type xmlToc struct {
-	XMLName               xml.Name "toc"
-	CreationTime          string
+	XMLName               xml.Name `xml:"toc"`
+	CreationTime          string   `xml:"creation-time"`
 	Checksum              *xmlChecksum
-	SignatureCreationTime uint64
+	SignatureCreationTime uint64 `xml:"signature-creation-time"`
 	Signature             *xmlSignature
-	File                  []*xmlFile
+	File                  []*xmlFile `xml:"file"`
 }
 
 type xmlFileChecksum struct {
 	XMLName xml.Name
-	Style   string "attr"
-	Digest  string "chardata"
+	Style   string `xml:"style,attr"`
+	Digest  string `xml:",chardata"`
 }
 
 type xmlFinderCreateTime struct {
-	XMLName     xml.Name "FinderCreateTime"
-	Nanoseconds uint64
-	Time        string
+	XMLName     xml.Name `xml:"FinderCreateTime"`
+	Nanoseconds uint64   `xml:"nanoseconds"`
+	Time        string   `xml:"time"`
 }
 
 type xmlFileEncoding struct {
-	XMLName xml.Name "encoding"
-	Style   string   "attr"
+	XMLName xml.Name `xml:"encoding"`
+	Style   string   `xml:"style,attr"`
 }
 
 type xmlFileData struct {
-	XMLName           xml.Name "data"
-	Length            int64
-	Offset            int64
-	Size              int64
+	XMLName           xml.Name `xml:"data"`
+	Length            int64    `xml:"length"`
+	Offset            int64    `xml:"offset"`
+	Size              int64    `xml:"size"`
 	Encoding          xmlFileEncoding
-	ArchivedChecksum  xmlFileChecksum
-	ExtractedChecksum xmlFileChecksum
+	ArchivedChecksum  xmlFileChecksum `xml:"archived-checksum"`
+	ExtractedChecksum xmlFileChecksum `xml:"extracted-checksum"`
 }
 
 type xmlFile struct {
-	XMLName          xml.Name "file"
-	Id               string   "attr"
-	Ctime            string
-	Mtime            string
-	Atime            string
-	Group            string
-	Gid              int
-	User             string
-	Uid              int
-	Mode             uint32
-	DeviceNo         uint64
-	Inode            uint64
-	Type             string
-	Name             string
+	XMLName          xml.Name `xml:"file"`
+	Id               string   `xml:"id,attr"`
+	Ctime            string   `xml:"ctime"`
+	Mtime            string   `xml:"mtime"`
+	Atime            string   `xml:"atime"`
+	Group            string   `xml:"group"`
+	Gid              int      `xml:"gid"`
+	User             string   `xml:"user"`
+	Uid              int      `xml:"uid"`
+	Mode             uint32   `xml:"mode"`
+	DeviceNo         uint64   `xml:"deviceno"`
+	Inode            uint64   `xml:"inode"`
+	Type             string   `xml:"type"`
+	Name             string   `xml:"name"`
 	FinderCreateTime *xmlFinderCreateTime
 	Data             *xmlFileData
-	File             []*xmlFile
+	File             []*xmlFile `xml:"file"`
 }

@@ -12,7 +12,7 @@ import (
 func TestOpenFile(t *testing.T) {
 	r, err := OpenReader("payload.xar")
 	if err != nil {
-		t.Errorf(err.String())
+		t.Fatal(err)
 	}
 
 	if r.HasSignature() {
@@ -20,7 +20,7 @@ func TestOpenFile(t *testing.T) {
 		fmt.Printf("Certificates = %v\n", r.Certificates)
 		fmt.Printf("\n")
 	} else {
-		fmt.Printf("XAR archive does not have a signature.\n")
+		t.Fatalf("xar archive should have had a signature, but r.HasSignature() = %v", r.HasSignature())
 	}
 
 	// dump all files in the xar archive
