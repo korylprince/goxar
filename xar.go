@@ -406,7 +406,7 @@ func fileChecksumFromXml(f *FileChecksum, x *xmlFileChecksum) (err error) {
 		return
 	}
 
-	switch x.Style {
+	switch strings.ToUpper(x.Style) {
 	case "MD5":
 		f.Kind = FileChecksumKindMD5
 	case "SHA1":
