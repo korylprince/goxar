@@ -4,10 +4,7 @@
 
 package xar
 
-import (
-	"fmt"
-	"testing"
-)
+import "testing"
 
 func TestOpenFile(t *testing.T) {
 	r, err := OpenReader("payload.xar")
@@ -16,19 +13,19 @@ func TestOpenFile(t *testing.T) {
 	}
 
 	if r.HasSignature() {
-		fmt.Printf("XAR archive has a signature. ValidSignature=%v\n", r.ValidSignature())
-		fmt.Printf("Certificates = %v\n", r.Certificates)
-		fmt.Printf("\n")
+		t.Logf("XAR archive has a signature. ValidSignature=%v\n", r.ValidSignature())
+		t.Logf("Certificates = %v\n", r.Certificates)
+		t.Logf("\n")
 	} else {
 		t.Fatalf("xar archive should have had a signature, but r.HasSignature() = %v", r.HasSignature())
 	}
 
 	// dump all files in the xar archive
 	for _, xf := range r.File {
-		fmt.Printf("name:            %v\n", xf.Name)
-		fmt.Printf("type:            %v\n", xf.Type)
-		fmt.Printf("info:            %v\n", xf.Info)
-		fmt.Printf("valid checksum:  %v\n", xf.VerifyChecksum())
-		fmt.Printf("\n")
+		t.Logf("name:            %v\n", xf.Name)
+		t.Logf("type:            %v\n", xf.Type)
+		t.Logf("info:            %v\n", xf.Info)
+		t.Logf("valid checksum:  %v\n", xf.VerifyChecksum())
+		t.Logf("\n")
 	}
 }
