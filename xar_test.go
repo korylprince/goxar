@@ -4,7 +4,28 @@
 
 package xar
 
-import "testing"
+import (
+	"bytes"
+	"encoding/xml"
+	"io/ioutil"
+	"testing"
+)
+
+func TestTOCBadDates(t *testing.T) {
+	data, err := ioutil.ReadFile("baddates.toc")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	root := &xmlXar{}
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.Strict = false
+	err = decoder.Decode(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+}
 
 func TestOpenFile(t *testing.T) {
 	r, err := OpenReader("payload.xar")
