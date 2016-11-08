@@ -33,7 +33,7 @@ type xmlToc struct {
 	XMLName               xml.Name `xml:"toc"`
 	CreationTime          string   `xml:"creation-time"`
 	Checksum              *xmlChecksum
-	SignatureCreationTime uint64 `xml:"signature-creation-time"`
+	SignatureCreationTime int64 `xml:"signature-creation-time"`
 	Signature             *xmlSignature
 	File                  []*xmlFile `xml:"file"`
 }
@@ -46,7 +46,7 @@ type xmlFileChecksum struct {
 
 type xmlFinderCreateTime struct {
 	XMLName     xml.Name `xml:"FinderCreateTime"`
-	Nanoseconds uint64   `xml:"nanoseconds"`
+	Nanoseconds int64    `xml:"nanoseconds"`
 	Time        string   `xml:"time"`
 }
 

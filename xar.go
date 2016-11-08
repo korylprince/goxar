@@ -124,7 +124,7 @@ type Reader struct {
 	File map[uint64]*File
 
 	Certificates          []*x509.Certificate
-	SignatureCreationTime uint64
+	SignatureCreationTime int64
 	SignatureError        error
 
 	xar        io.ReaderAt
