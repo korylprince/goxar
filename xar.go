@@ -360,23 +360,30 @@ func (r *Reader) ValidSignature() bool {
 }
 
 func xmlFileToFileInfo(xmlFile *xmlFile) (fi FileInfo, err error) {
-	t, err := time.Parse(time.RFC3339, xmlFile.Ctime)
-	if err != nil {
-		return
+	var t time.Time
+	if xmlFile.Ctime != "" {
+		t, err = time.Parse(time.RFC3339, xmlFile.Ctime)
+		if err != nil {
+			return
+		}
+		fi.Ctime = t.Unix()
 	}
-	fi.Ctime = t.Unix()
 
-	t, err = time.Parse(time.RFC3339, xmlFile.Mtime)
-	if err != nil {
-		return
+	if xmlFile.Mtime != "" {
+		t, err = time.Parse(time.RFC3339, xmlFile.Mtime)
+		if err != nil {
+			return
+		}
+		fi.Mtime = t.Unix()
 	}
-	fi.Mtime = t.Unix()
 
-	t, err = time.Parse(time.RFC3339, xmlFile.Atime)
-	if err != nil {
-		return
+	if xmlFile.Atime != "" {
+		t, err = time.Parse(time.RFC3339, xmlFile.Atime)
+		if err != nil {
+			return
+		}
+		fi.Atime = t.Unix()
 	}
-	fi.Atime = t.Unix()
 
 	fi.Group = xmlFile.Group
 	fi.Gid = xmlFile.Gid

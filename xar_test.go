@@ -25,6 +25,13 @@ func TestTOCBadDates(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	for _, f := range root.Toc.File {
+		_, err = xmlFileToFileInfo(f)
+		if err != nil {
+			t.Error("failed to parse file with missing dates:", err)
+		}
+	}
+
 }
 
 func TestOpenFile(t *testing.T) {
