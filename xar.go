@@ -43,7 +43,6 @@ var (
 	ErrCertificateTypeMismatch    = errors.New("xar: certificate type and public key type mismatch")
 	ErrCertificateTypeUnsupported = errors.New("xar: unsupported certificate type")
 
-	ErrFileNoData              = errors.New("xar: file has no data")
 	ErrFileEncodingUnsupported = errors.New("xar: unsupported file encoding")
 )
 
@@ -449,7 +448,6 @@ func (r *Reader) readXmlFileTree(xmlFile *xmlFile, dir string) (err error) {
 	}
 
 	if xf.Type == FileTypeFile && xmlFile.Data == nil {
-		err = ErrFileNoData
 		return
 	}
 	if xf.Type == FileTypeFile {
