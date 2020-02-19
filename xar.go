@@ -119,6 +119,11 @@ type File struct {
 	heap   io.ReaderAt
 }
 
+type ReaderAtCloser interface {
+	io.ReaderAt
+	io.Closer
+}
+
 type Reader struct {
 	File map[uint64]*File
 
@@ -126,7 +131,7 @@ type Reader struct {
 	SignatureCreationTime int64
 	SignatureError        error
 
-	xar        io.ReaderAt
+	xar        ReaderAtCloser
 	size       int64
 	heapOffset int64
 }
@@ -147,7 +152,7 @@ func OpenReader(name string) (*Reader, error) {
 }
 
 // NewReader returns a new reader reading from r, which is assumed to have the given size in bytes.
-func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
+func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 	xr := &Reader{
 		File: make(map[uint64]*File),
 		xar:  r,
@@ -322,6 +327,11 @@ func (r *Reader) readAndVerifySignature(root *xmlXar, checksumKind uint32, check
 	}
 
 	return nil
+}
+
+// Close closes the opened XAR file.
+func (r *Reader) Close() error {
+	return r.xar.Close()
 }
 
 // This is a convenience method that returns true if the opened XAR archive
