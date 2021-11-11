@@ -33,7 +33,7 @@ type xmlToc struct {
 	XMLName               xml.Name `xml:"toc"`
 	CreationTime          string   `xml:"creation-time"`
 	Checksum              *xmlChecksum
-	SignatureCreationTime int64 `xml:"signature-creation-time"`
+	SignatureCreationTime float64 `xml:"signature-creation-time"`
 	Signature             *xmlSignature
 	File                  []*xmlFile `xml:"file"`
 }

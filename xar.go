@@ -266,7 +266,7 @@ func (r *Reader) readAndVerifySignature(root *xmlXar, checksumKind uint32, check
 	}()
 
 	// Check if there's a signature ...
-	r.SignatureCreationTime = root.Toc.SignatureCreationTime
+	r.SignatureCreationTime = int64(root.Toc.SignatureCreationTime)
 	if root.Toc.Signature != nil {
 		if len(root.Toc.Signature.Certificates) == 0 {
 			return ErrNoCertificates
