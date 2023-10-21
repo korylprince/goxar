@@ -1,0 +1,4 @@
+tools/resign-xar/resign-xar
+tools/verify-xar/verify-xar
+
+vendor/
