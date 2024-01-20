@@ -25,9 +25,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smallstep/pkcs7"
 )
 
 var (
@@ -136,6 +139,10 @@ type Reader struct {
 	Certificates   []*x509.Certificate
 	Signature      []byte
 	SignatureError error
+
+	XCertificates   []*x509.Certificate
+	XSignature      []byte
+	XSignatureError error
 
 	xar        ReaderAtCloser
 	size       int64
@@ -262,6 +269,7 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 	// check signatures
 	xr.SignatureCreationTime = int64(root.Toc.SignatureCreationTime)
 	xr.SignatureError = xr.readAndVerifySignature(root)
+	xr.XSignatureError = xr.readAndVerifyXSignature(root)
 
 	// add files to reader
 	for _, xmlFile := range root.Toc.File {
@@ -334,6 +342,78 @@ func (r *Reader) readAndVerifySignature(root *xmlXar) (err error) {
 	}
 
 	return nil
+}
+
+// Reads x-signature information from the xmlXar element into
+// the Reader. Also attempts to verify any signatures found.
+func (r *Reader) readAndVerifyXSignature(root *xmlXar) (err error) {
+	// check if there's a signature
+	if root.Toc.XSignature == nil {
+		return nil
+	}
+
+	// check if there's certs
+	if len(root.Toc.XSignature.Certificates) == 0 {
+		return ErrNoCertificates
+	}
+
+	// read signature
+	signature := make([]byte, root.Toc.XSignature.Size)
+	_, err = r.xar.ReadAt(signature, r.heapOffset+root.Toc.XSignature.Offset)
+	if err != nil {
+		return fmt.Errorf("could not read signature: %w", err)
+	}
+	r.XSignature = signature
+
+	// verify cert chain
+	for i := 1; i < len(r.XCertificates); i++ {
+		if err := r.XCertificates[i-1].CheckSignatureFrom(r.XCertificates[i]); err != nil {
+			return fmt.Errorf("could not verify certificate chain: %w", err)
+		}
+	}
+
+	// verify signature
+	// note: we use the certs from the signature, not the toc
+	// in practice, there's a lot of issues with signing certificates used in the wild, so we do some manual verification
+	if strings.ToUpper(root.Toc.XSignature.Style) != "CMS" {
+		return ErrCertificateTypeUnsupported
+	}
+	p7, err := pkcs7.Parse(signature)
+	if err != nil {
+		return fmt.Errorf("could not parse pkcs7 signature: %w", err)
+	}
+	p7.Content = r.Checksum
+
+	signer := p7.GetOnlySigner()
+	if signer == nil {
+		return errors.New("could not verify pkcs7 signature: signature did not have exactly one signer")
+	}
+	r.XCertificates = make([]*x509.Certificate, 1, len(p7.Certificates))
+	r.XCertificates[0] = signer
+
+	// only verifies signer, not chain
+	if err = p7.Verify(); err != nil {
+		return fmt.Errorf("could not verify signature: %w", err)
+	}
+
+	// verify chain to root
+	cur := signer
+	others := slices.DeleteFunc(p7.Certificates, func(c *x509.Certificate) bool { return c.Equal(cur) })
+outer:
+	for len(others) > 1 {
+		for _, parent := range others {
+			if err := cur.CheckSignatureFrom(parent); err == nil {
+				r.XCertificates = append(r.XCertificates, parent)
+				cur = parent
+				others = slices.DeleteFunc(others, func(c *x509.Certificate) bool { return c.Equal(cur) })
+				continue outer
+			}
+		}
+		return errors.New("could not verify signature: could not verify chain")
+	}
+	r.XCertificates = append(r.XCertificates, others[0])
+
+	return err
 }
 
 // Close closes the opened XAR file.

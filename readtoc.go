@@ -29,12 +29,22 @@ type xmlSignature struct {
 	Certificates []string `xml:"KeyInfo>X509Data>X509Certificate"`
 }
 
+// x-signature is used by Apple as an alternative to signature
+type xXMLSignature struct {
+	XMLName      xml.Name `xml:"x-signature"`
+	Style        string   `xml:"style,attr"`
+	Offset       int64    `xml:"offset"`
+	Size         int64    `xml:"size"`
+	Certificates []string `xml:"KeyInfo>X509Data>X509Certificate"`
+}
+
 type xmlToc struct {
 	XMLName               xml.Name `xml:"toc"`
 	CreationTime          string   `xml:"creation-time"`
 	Checksum              *xmlChecksum
 	SignatureCreationTime float64 `xml:"signature-creation-time"`
 	Signature             *xmlSignature
+	XSignature            *xXMLSignature
 	File                  []*xmlFile `xml:"file"`
 }
 
