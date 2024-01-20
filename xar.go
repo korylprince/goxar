@@ -17,6 +17,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/pem"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -453,6 +454,70 @@ func (r *Reader) HasSignature() bool {
 // cause.
 func (r *Reader) ValidSignature() bool {
 	return r.SignatureCreationTime > 0 && r.SignatureError == nil
+}
+
+// public key of Apple Root CA
+var appleCAPublicKey = func() *rsa.PublicKey {
+	// obtained with `curl https://www.apple.com/appleca/AppleIncRootCertificate.cer | openssl x509 -inform der -noout --pubkey`
+	pubkey := `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5JGpCR+R2x5HUOsF7V55
+hC3rNqJXTFXsixmJ3vlLbPUHqyIwAugYPvhQCdN/QaiY+dHKZpwkaxHQo7vkGyrD
+H5WeegykR4tb1BY3M8vED03OFGnRyRly9V0O1X9fm/IlA7pVj01dDfFkNSMVSxVZ
+HbOU9/acns9QusFYUGePCLQg98usLCBvcLY/ATCMt0PPD5098ytJKBrI/s61uQ7Z
+XhzWyz21Oq30Dw4AkguxIRYudNU8DdtiFqujcZJHU1XBry9Bs/j743DN5qNMRX4f
+TGtQlkGJxHRiCxCDQYczioGxMFjsWgQyjGizjx3eZXP/Z15lvEnYdp8zFGWhd5TJ
+LQIDAQAB
+-----END PUBLIC KEY-----`
+	block, _ := pem.Decode([]byte(pubkey))
+	key, _ := x509.ParsePKIXPublicKey(block.Bytes)
+	return key.(*rsa.PublicKey)
+}()
+
+func (r *Reader) VerifyApplePkg() error {
+	var (
+		root   *x509.Certificate
+		header string
+	)
+	// check x-signature, then signature for errors
+	if len(r.XCertificates) > 0 {
+		if r.XSignatureError != nil {
+			return fmt.Errorf("invalid x-signature: %w", r.XSignatureError)
+		}
+		root = r.XCertificates[len(r.XCertificates)-1]
+		header = "x-signature"
+	} else if len(r.Certificates) > 0 {
+		if r.SignatureError != nil {
+			return fmt.Errorf("invalid signature: %w", r.SignatureError)
+		}
+		root = r.Certificates[len(r.Certificates)-1]
+		header = "signature"
+	}
+
+	// verify root cert is Apple CA
+	if root == nil {
+		return ErrNoCertificates
+	}
+
+	// verify public key matches Apple Root CA
+	if root.PublicKeyAlgorithm != x509.RSA {
+		return fmt.Errorf("could not verify %s root: invalid signature algorithm: %s", header, root.PublicKeyAlgorithm.String())
+	}
+	rsaKey, ok := root.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("could not verify %s root: unknown key type", header)
+	}
+
+	if !rsaKey.Equal(appleCAPublicKey) {
+		return fmt.Errorf("could not verify %s root: public key not equal to Apple Root CA", header)
+	}
+
+	// verify is self-signed
+	hashed := sha1.Sum(root.RawTBSCertificate)
+	if err := rsa.VerifyPKCS1v15(appleCAPublicKey, crypto.SHA1, hashed[:], root.Signature); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func xmlFileToFileInfo(xmlFile *xmlFile) (fi FileInfo, err error) {
