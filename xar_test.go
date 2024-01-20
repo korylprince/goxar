@@ -7,12 +7,12 @@ package xar
 import (
 	"bytes"
 	"encoding/xml"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
 func TestTOCBadDates(t *testing.T) {
-	data, err := ioutil.ReadFile("baddates.toc")
+	data, err := os.ReadFile("testdata/baddates.toc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestTOCBadDates(t *testing.T) {
 }
 
 func TestOpenFile(t *testing.T) {
-	r, err := OpenReader("payload.xar")
+	r, err := OpenReader("testdata/payload.xar")
 	if err != nil {
 		t.Fatal(err)
 	}

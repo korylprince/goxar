@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -127,9 +128,14 @@ type ReaderAtCloser interface {
 type Reader struct {
 	File map[uint64]*File
 
-	Certificates          []*x509.Certificate
+	ChecksumHash crypto.Hash
+	Checksum     []byte
+
 	SignatureCreationTime int64
-	SignatureError        error
+
+	Certificates   []*x509.Certificate
+	Signature      []byte
+	SignatureError error
 
 	xar        ReaderAtCloser
 	size       int64
@@ -159,6 +165,7 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 		size: size,
 	}
 
+	// read header
 	hdr := make([]byte, xarHeaderSize)
 	_, err := xr.xar.ReadAt(hdr, 0)
 	if err != nil {
@@ -185,12 +192,14 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 		return nil, ErrBadHeaderSize
 	}
 
+	// read zlib-compressed toc
 	ztoc := make([]byte, xh.toc_len_zlib)
 	_, err = xr.xar.ReadAt(ztoc, xarHeaderSize)
 	if err != nil {
 		return nil, err
 	}
 
+	// decompress and parse toc
 	br := bytes.NewBuffer(ztoc)
 	zr, err := zlib.NewReader(br)
 	if err != nil {
@@ -207,17 +216,19 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 
 	xr.heapOffset = xarHeaderSize + int64(xh.toc_len_zlib)
 
+	// check checksum is in header
 	if root.Toc.Checksum == nil {
 		return nil, ErrNoTOCChecksum
 	}
 
-	// Check whether the XAR checksum matches
+	// read checksum of toc stored in the heap
 	storedsum := make([]byte, root.Toc.Checksum.Size)
 	_, err = io.ReadFull(io.NewSectionReader(xr.xar, xr.heapOffset+root.Toc.Checksum.Offset, root.Toc.Checksum.Size), storedsum)
 	if err != nil {
 		return nil, err
 	}
 
+	// determine hash type
 	var hasher hash.Hash
 	switch xh.checksum_kind {
 	case xarChecksumKindNone:
@@ -226,28 +237,33 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 		if root.Toc.Checksum.Style != "sha1" {
 			return nil, ErrChecksumTypeMismatch
 		}
+		xr.ChecksumHash = crypto.SHA1
 		hasher = sha1.New()
 	case xarChecksumKindMD5:
 		if root.Toc.Checksum.Style != "md5" {
 			return nil, ErrChecksumTypeMismatch
 		}
+		xr.ChecksumHash = crypto.MD5
 		hasher = md5.New()
 	default:
 		return nil, ErrChecksumUnsupported
 	}
 
+	// hash toc
 	hasher.Write(ztoc)
 	calcedsum := hasher.Sum(nil)
 
+	// make sure checksums are equal
 	if !bytes.Equal(calcedsum, storedsum) {
 		return nil, ErrChecksumMismatch
 	}
+	xr.Checksum = calcedsum
 
-	// Ignore error. The method automatically sets xr.SignatureError with
-	// the returned error.
-	_ = xr.readAndVerifySignature(root, xh.checksum_kind, calcedsum)
+	// check signatures
+	xr.SignatureCreationTime = int64(root.Toc.SignatureCreationTime)
+	xr.SignatureError = xr.readAndVerifySignature(root)
 
-	// Add files to Reader
+	// add files to reader
 	for _, xmlFile := range root.Toc.File {
 		err := xr.readXmlFileTree(xmlFile, "")
 		if err != nil {
@@ -260,70 +276,61 @@ func NewReader(r ReaderAtCloser, size int64) (*Reader, error) {
 
 // Reads signature information from the xmlXar element into
 // the Reader. Also attempts to verify any signatures found.
-func (r *Reader) readAndVerifySignature(root *xmlXar, checksumKind uint32, checksum []byte) (err error) {
-	defer func() {
-		r.SignatureError = err
-	}()
+func (r *Reader) readAndVerifySignature(root *xmlXar) (err error) {
+	// check if there's a signature
+	if root.Toc.Signature == nil {
+		return nil
+	}
 
-	// Check if there's a signature ...
-	r.SignatureCreationTime = int64(root.Toc.SignatureCreationTime)
-	if root.Toc.Signature != nil {
-		if len(root.Toc.Signature.Certificates) == 0 {
-			return ErrNoCertificates
-		}
+	// check if there's certs
+	if len(root.Toc.Signature.Certificates) == 0 {
+		return ErrNoCertificates
+	}
 
-		signature := make([]byte, root.Toc.Signature.Size)
-		_, err = r.xar.ReadAt(signature, r.heapOffset+root.Toc.Signature.Offset)
+	// read signature
+	signature := make([]byte, root.Toc.Signature.Size)
+	_, err = r.xar.ReadAt(signature, r.heapOffset+root.Toc.Signature.Offset)
+	if err != nil {
+		return fmt.Errorf("could not read signature: %w", err)
+	}
+	r.Signature = signature
+
+	// read certs
+	for i := 0; i < len(root.Toc.Signature.Certificates); i++ {
+		cb64 := []byte(strings.Replace(root.Toc.Signature.Certificates[i], "\n", "", -1))
+		cder := make([]byte, base64.StdEncoding.DecodedLen(len(cb64)))
+		ndec, err := base64.StdEncoding.Decode(cder, cb64)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not base64 decode certificates[%d]: %w", i, err)
 		}
 
-		// Read certificates
-		for i := 0; i < len(root.Toc.Signature.Certificates); i++ {
-			cb64 := []byte(strings.Replace(root.Toc.Signature.Certificates[i], "\n", "", -1))
-			cder := make([]byte, base64.StdEncoding.DecodedLen(len(cb64)))
-			ndec, err := base64.StdEncoding.Decode(cder, cb64)
-			if err != nil {
-				return err
-			}
-
-			cert, err := x509.ParseCertificate(cder[0:ndec])
-			if err != nil {
-				return err
-			}
-
-			r.Certificates = append(r.Certificates, cert)
+		cert, err := x509.ParseCertificate(cder[0:ndec])
+		if err != nil {
+			return fmt.Errorf("could not parse certificates[%d]: %w", i, err)
 		}
 
-		// Verify validity of chain
-		for i := 1; i < len(r.Certificates); i++ {
-			if err := r.Certificates[i-1].CheckSignatureFrom(r.Certificates[i]); err != nil {
-				return err
-			}
-		}
+		r.Certificates = append(r.Certificates, cert)
+	}
 
-		var sighash crypto.Hash
-		switch checksumKind {
-		case xarChecksumKindNone:
-			return ErrChecksumUnsupported
-		case xarChecksumKindSHA1:
-			sighash = crypto.SHA1
-		case xarChecksumKindMD5:
-			sighash = crypto.MD5
+	// verify cert chain
+	for i := 1; i < len(r.Certificates); i++ {
+		if err := r.Certificates[i-1].CheckSignatureFrom(r.Certificates[i]); err != nil {
+			return fmt.Errorf("could not verify certificate chain: %w", err)
 		}
+	}
 
-		if root.Toc.Signature.Style == "RSA" {
-			pubkey, ok := r.Certificates[0].PublicKey.(*rsa.PublicKey)
-			if !ok {
-				return ErrCertificateTypeMismatch
-			}
-			err = rsa.VerifyPKCS1v15(pubkey, sighash, checksum, signature)
-			if err != nil {
-				return err
-			}
-		} else {
-			return ErrCertificateTypeUnsupported
-		}
+	// verify xar signature
+	if root.Toc.Signature.Style != "RSA" {
+		return ErrCertificateTypeUnsupported
+	}
+
+	pubkey, ok := r.Certificates[0].PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return ErrCertificateTypeMismatch
+	}
+	err = rsa.VerifyPKCS1v15(pubkey, r.ChecksumHash, r.Checksum, signature)
+	if err != nil {
+		return fmt.Errorf("could not verify xar signature: %w", err)
 	}
 
 	return nil
