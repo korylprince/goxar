@@ -473,6 +473,11 @@ LQIDAQAB
 	return key.(*rsa.PublicKey)
 }()
 
+// VerifyApplePkg verifies the xar like Apple's `pkgutil --check-signature`.
+// Particularly, Apple uses a custom PKCS7 signature (x-signature element in the xar TOC) to sign and verify xar (pkg) files.
+// VerifyApplePkg follows pkgutil's verification method: if x-signature is present, it will be used to verify the pkg
+// (even if the standard xar signature is invalid).
+// If x-signature is not present, verify the pkg like a standard xar (using signature element in the xar TOC).
 func (r *Reader) VerifyApplePkg() error {
 	var (
 		root   *x509.Certificate
