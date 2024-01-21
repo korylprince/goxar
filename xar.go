@@ -26,10 +26,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/smallstep/pkcs7"
 )
